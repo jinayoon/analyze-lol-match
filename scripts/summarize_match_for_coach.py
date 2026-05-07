@@ -60,8 +60,27 @@ def _skillcapped_load_cache(path: Path, ttl_seconds: int) -> dict[str, Any] | No
 
 
 def _skillcapped_extract(html: str) -> dict[str, Any]:
+    # Collect unique item/rune names from RSC payload in script tags
+    items = sorted(set(
+        re.findall(r'ScItemInline\s+itemName=\\"([^\\]+)\\"', html)
+        + re.findall(r'ScItemInline\s+itemName="([^"]+)"', html)
+    ))
+    runes = sorted(set(
+        re.findall(r'ScRuneInline\s+runeIdentifier=\\"([^\\]+)\\"', html)
+        + re.findall(r'ScRuneInline\s+runeIdentifier="([^"]+)"', html)
+    ))
+
+    # Strip scripts/styles first (RSC payload lives here — item names are img tags in the HTML)
     no_scripts = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.S)
     no_styles = re.sub(r"<style[^>]*>.*?</style>", " ", no_scripts, flags=re.S)
+
+    # Replace small icon <img> tags (items ~19px, runes ~28px) with [alt text] inline
+    no_styles = re.sub(
+        r'<img\b[^>]*\balt="([^"]+)"[^>]*/?>',
+        lambda m: f"[{m.group(1)}]",
+        no_styles,
+    )
+
     text = re.sub(r"<[^>]+>", " ", no_styles)
     text = re.sub(r"&#x27;", "'", text)
     text = re.sub(r"&amp;", "&", text)
@@ -69,14 +88,6 @@ def _skillcapped_extract(html: str) -> dict[str, Any]:
     if len(text) > SKILLCAPPED_TEXT_CAP:
         text = text[:SKILLCAPPED_TEXT_CAP] + " …[truncated]"
 
-    items = sorted(set(
-        re.findall(r'ScItemInline\s+itemName=\\"([^\\]+)\\"', html)
-        + re.findall(r'ScItemInline\s+itemName="([^"]+)"', html)
-    ))
-    runes = sorted(set(
-        re.findall(r'runeIdentifier=\\"([^\\]+)\\"', html)
-        + re.findall(r'runeIdentifier="([^"]+)"', html)
-    ))
     return {"text": text, "items_referenced": items, "runes_referenced": runes}
 
 
