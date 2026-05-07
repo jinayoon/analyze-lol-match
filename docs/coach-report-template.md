@@ -1,6 +1,12 @@
-# Post-match coaching report — template
+# Post-match coaching report – template
 
-Follow this structure in the Markdown report. The HTML renderer (`scripts/render_coach_report.py`) auto-builds hero, quick stats, team table, and timeline from `coach_digest.json`; narrative should start at **`## Phase 1:`** so the HTML does not duplicate the top sections.
+Follow this structure in the Markdown report. The HTML renderer (`scripts/render_coach_report.py`) auto-builds hero, quick stats, team table, and timeline from `coach_digest.json`. It also pulls **`Honest Verdict`**, **`Game Summary`**, and the summary **`3 Things to Work On`** list into styled blocks, turns fenced **finding** blocks (see below) into cards, and strips **`## Quick Stats`** / **`## Team Overview`** from the MD when present so they are not duplicated in the page.
+
+---
+
+## Typography
+
+Use **en dash (–)** not em dash (—) everywhere in report output: in phase labels, finding headers, list hooks, prose, everywhere.
 
 ---
 
@@ -23,7 +29,7 @@ Follow this structure in the Markdown report. The HTML renderer (`scripts/render
 ## Finding block format
 
 ```
-[MM:SS | location] PHASE — LENS — Title
+[MM:SS | location] PHASE – LENS – Title
 Severity: HIGH / MEDIUM / LOW
 What happened: One specific sentence with a number or name.
 What to do instead: One actionable sentence (no “watch a VOD”).
@@ -36,17 +42,17 @@ What to do instead: One actionable sentence (no “watch a VOD”).
 ## Full document outline
 
 ```markdown
-# Post-Match Coaching Report — [Player] ([Champion], [Role]) | [W/L] [Duration] | Patch [X]
+# Post-Match Coaching Report – [Player] ([Champion], [Role]) | [W/L] [Duration] | Patch [X]
 
 **Match ID:** `...`
-**OP.GG:** [placeholder — user pastes permalink if desired]
+**OP.GG:** [placeholder – user pastes permalink if desired]
 
 **Honest Verdict:** (1 sentence, blunt)
 
 **Game Summary:** (1–3 sentences)
 
 **3 Things to Work On:**
-1. **[Skill]** — hook
+1. **[Skill]** – hook
 2. ...
 3. ...
 
@@ -89,6 +95,6 @@ What to do instead: One actionable sentence (no “watch a VOD”).
 
 ## File naming
 
-Save under **`reviews/[YYYY-MM-DD]_[HHMM]_[Champion].md`** at the **repository root** (same folder as `scripts/` and `docs/`), using `gameStartTimestamp` from `match.json`. If you use `ANALYZE_LOL_MATCH_ROOT` (or legacy `LOL_MATCH_ANALYSIS_ROOT`), that path is `$ANALYZE_LOL_MATCH_ROOT/reviews/...` or `$LOL_MATCH_ANALYSIS_ROOT/reviews/...`.
+Save under **`reviews/md/[YYYY-MM-DD]_[HHMM]_[Champion].md`** at the **repository root** (same folder as `scripts/` and `docs/`), using `gameStartTimestamp` from `match.json`. If you use `ANALYZE_LOL_MATCH_ROOT` (or legacy `LOL_MATCH_ANALYSIS_ROOT`), that path is `$ANALYZE_LOL_MATCH_ROOT/reviews/md/...` or `$LOL_MATCH_ANALYSIS_ROOT/reviews/md/...`. HTML from `render_coach_report.py` defaults to **`reviews/html/<same-stem>.html`** (gitignored here). Sync **`reviews/html/`** into your separate **lol-reviews** GitHub Pages repo when publishing.
 
 Append the Riot disclaimer from `docs/riot-disclaimer.txt` after a `---` divider (or use `render_coach_report.py --append-disclaimer-md`).
