@@ -784,20 +784,24 @@ Win condition: zone, poke to 50% HP, then all-in.
 
 ## Skill Capped Build Reference
 
-For the most current champion-specific build advice (item order, rune choices, situational items, matchup tips), fetch the Skill Capped guide for the analyzed champion and role before critiquing item choices.
+Skill Capped guidance for the focus champion+role is pre-fetched by `scripts/summarize_match_for_coach.py` and embedded in `coach_digest.json` under the top-level key `skillcapped_build`. Read that key when critiquing items — **do not call WebFetch on skill-capped.com at analysis time**. The summarizer caches results to `data/skillcapped_cache/{champion}/{role}.json` with a 24h TTL, so repeated analyses don't re-fetch.
 
-**URL pattern:** `https://www.skill-capped.com/lol/guides/builds/{champion_lowercase}/{role_lowercase}`
+**Shape of `coach_digest.skillcapped_build`** (or `null` if fetch was skipped/failed):
+- `source_url` — the page that was fetched
+- `champion`, `role` — slugs used
+- `fetched_at` — epoch seconds (use to judge freshness if needed)
+- `text` — readable narrative stripped from the page (size-capped)
+- `items_referenced` — list of item names the guide calls out
+- `runes_referenced` — list of rune identifiers
+- `cache` — `"hit"` or `"miss"` (whether this run used a cached copy)
 
-**Role slug mapping:**
+**URL pattern (for human reference only — Claude does not fetch this):** `https://www.skill-capped.com/lol/guides/builds/{champion_lowercase}/{role_lowercase}`
+
+**Role slug mapping** (Riot `teamPosition` → Skill Capped slug):
 - TOP → `top`
 - JUNGLE → `jungle`
 - MIDDLE → `mid`
 - BOTTOM → `adc`
-- SUPPORT (UTILITY) → `support`
+- UTILITY → `support`
 
-**Examples:**
-- Lulu support: `https://www.skill-capped.com/lol/guides/builds/lulu/support`
-- Jinx ADC: `https://www.skill-capped.com/lol/guides/builds/jinx/adc`
-- Shaco jungle: `https://www.skill-capped.com/lol/guides/builds/shaco/jungle`
-
-Use WebFetch on this URL before critiquing any item purchase. The guide contains recommended builds, item reasoning, and situational purchase conditions that reflect the current patch meta.
+If `skillcapped_build` is `null` or missing in the digest (e.g. the summarizer ran with `--no-skillcapped`, or the fetch failed), fall back to the static heuristics in `docs/coach-pitfalls.md` and the role-archetype guidance elsewhere in this file.

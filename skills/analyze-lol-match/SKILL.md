@@ -38,7 +38,7 @@ Paths are relative to **repository root**:
 
 | Topic | Path |
 |--------|------|
-| LoL domain + Riot API + Skill Capped URLs | `docs/lol-reference.md` |
+| LoL domain + Riot API reference | `docs/lol-reference.md` |
 | Report outline + naming + finding format | `docs/coach-report-template.md` |
 | 4 phases × 5 lenses | `docs/coach-analyze-rubric.md` |
 | Smite, Braum/GW/item pitfalls | `docs/coach-pitfalls.md` |
@@ -67,7 +67,7 @@ python3 "$REPO/scripts/fetch_lol_match.py" --riot-id "GameName#TAG" --platform n
 
 By default this also downloads **Data Dragon** `items.json` + `champion.json` into `$MATCH_EXPORT`. Use `--no-ddragon` only if you must skip. If `timeline.json` is a stub (`timeline_not_available`), say so in the report and skip frame-level work.
 
-**Skill Capped:** before item critique, fetch the guide URL from `docs/lol-reference.md` (role slugs).
+**Skill Capped builds:** the summarizer (next step) pre-fetches the relevant Skill Capped guide for the focus champion+role and embeds it in `coach_digest.json` under `skillcapped_build` (cached locally for 24h). For item critique, read that key from the digest. **Do not call WebFetch on skill-capped.com at analysis time** — it's already in the digest. If `skillcapped_build` is `null`/missing, fall back to `docs/coach-pitfalls.md`.
 
 ### 3) Digest (structured data for analysis + HTML)
 

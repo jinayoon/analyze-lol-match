@@ -15,9 +15,124 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
+
+
+SKILLCAPPED_ROLE_MAP = {
+    "TOP": "top",
+    "JUNGLE": "jungle",
+    "MIDDLE": "mid",
+    "BOTTOM": "adc",
+    "UTILITY": "support",
+}
+SKILLCAPPED_CACHE_DIR = Path(__file__).resolve().parents[1] / "data" / "skillcapped_cache"
+SKILLCAPPED_DEFAULT_TTL = 24 * 60 * 60
+SKILLCAPPED_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+)
+SKILLCAPPED_TEXT_CAP = 30_000
+
+
+def _skillcapped_url(champion_slug: str, role_slug: str) -> str:
+    return f"https://www.skill-capped.com/lol/guides/builds/{champion_slug}/{role_slug}"
+
+
+def _skillcapped_cache_path(champion_slug: str, role_slug: str) -> Path:
+    return SKILLCAPPED_CACHE_DIR / champion_slug / f"{role_slug}.json"
+
+
+def _skillcapped_load_cache(path: Path, ttl_seconds: int) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    if time.time() - path.stat().st_mtime > ttl_seconds:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _skillcapped_extract(html: str) -> dict[str, Any]:
+    no_scripts = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.S)
+    no_styles = re.sub(r"<style[^>]*>.*?</style>", " ", no_scripts, flags=re.S)
+    text = re.sub(r"<[^>]+>", " ", no_styles)
+    text = re.sub(r"&#x27;", "'", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > SKILLCAPPED_TEXT_CAP:
+        text = text[:SKILLCAPPED_TEXT_CAP] + " …[truncated]"
+
+    items = sorted(set(
+        re.findall(r'ScItemInline\s+itemName=\\"([^\\]+)\\"', html)
+        + re.findall(r'ScItemInline\s+itemName="([^"]+)"', html)
+    ))
+    runes = sorted(set(
+        re.findall(r'runeIdentifier=\\"([^\\]+)\\"', html)
+        + re.findall(r'runeIdentifier="([^"]+)"', html)
+    ))
+    return {"text": text, "items_referenced": items, "runes_referenced": runes}
+
+
+def _skillcapped_fetch(champion_slug: str, role_slug: str, timeout: float = 10.0) -> dict[str, Any] | None:
+    url = _skillcapped_url(champion_slug, role_slug)
+    req = urllib.request.Request(url, headers={"User-Agent": SKILLCAPPED_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                print(f"[skillcapped] {url} -> HTTP {resp.status}", file=sys.stderr)
+                return None
+            html = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        print(f"[skillcapped] fetch failed for {url}: {e}", file=sys.stderr)
+        return None
+
+    extracted = _skillcapped_extract(html)
+    return {
+        "source_url": url,
+        "champion": champion_slug,
+        "role": role_slug,
+        "fetched_at": int(time.time()),
+        **extracted,
+    }
+
+
+def _skillcapped_get(champion_slug: str, role_slug: str, ttl_seconds: int) -> dict[str, Any] | None:
+    cache_path = _skillcapped_cache_path(champion_slug, role_slug)
+    cached = _skillcapped_load_cache(cache_path, ttl_seconds)
+    if cached is not None:
+        cached["cache"] = "hit"
+        return cached
+    fresh = _skillcapped_fetch(champion_slug, role_slug)
+    if fresh is None:
+        return None
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(fresh, ensure_ascii=False), encoding="utf-8")
+    except OSError as e:
+        print(f"[skillcapped] cache write failed: {e}", file=sys.stderr)
+    fresh["cache"] = "miss"
+    return fresh
+
+
+def attach_skillcapped_build(digest: dict[str, Any], ttl_seconds: int) -> None:
+    focus = digest.get("focus") or {}
+    champion = focus.get("ddragon_champion_slug") or focus.get("championName")
+    team_pos = focus.get("teamPosition")
+    if not champion or not team_pos:
+        digest["skillcapped_build"] = None
+        return
+    role_slug = SKILLCAPPED_ROLE_MAP.get(team_pos.upper())
+    if not role_slug:
+        digest["skillcapped_build"] = None
+        return
+    digest["skillcapped_build"] = _skillcapped_get(champion.lower(), role_slug, ttl_seconds)
 
 
 def ms_to_mmss(ms: int) -> str:
@@ -475,6 +590,13 @@ def main() -> None:
     ap.add_argument("--focus-riot", default=None, help='Player to highlight, e.g. "Name#TAG"')
     ap.add_argument("--focus-puuid", default=None)
     ap.add_argument("--write-md", action="store_true", help="Also write coach_digest.md")
+    ap.add_argument("--no-skillcapped", action="store_true", help="Skip Skill Capped build prefetch")
+    ap.add_argument(
+        "--skillcapped-ttl",
+        type=int,
+        default=SKILLCAPPED_DEFAULT_TTL,
+        help=f"Cache TTL in seconds (default {SKILLCAPPED_DEFAULT_TTL})",
+    )
     args = ap.parse_args()
 
     d = args.dir
@@ -503,6 +625,9 @@ def main() -> None:
     meta_path = d / "fetch_meta.json"
     if meta_path.is_file():
         digest["fetch_meta"] = load_json(meta_path)
+
+    if not args.no_skillcapped:
+        attach_skillcapped_build(digest, args.skillcapped_ttl)
 
     out_json = d / "coach_digest.json"
     out_json.write_text(json.dumps(digest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

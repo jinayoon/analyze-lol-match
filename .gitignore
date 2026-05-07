@@ -19,3 +19,6 @@ Thumbs.db
 # Generated coaching reports (keep folder with .gitkeep only)
 reviews/*
 !reviews/.gitkeep
+
+# Skill Capped build prefetch cache (regenerated daily by summarizer)
+data/skillcapped_cache/
